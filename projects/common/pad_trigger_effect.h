@@ -28,6 +28,11 @@ typedef enum ScePadTriggerEffectMode {
   SCE_PAD_TRIGGER_EFFECT_MODE_MULTIPLE_POSITION_FEEDBACK,
   SCE_PAD_TRIGGER_EFFECT_MODE_SLOPE_FEEDBACK,
   SCE_PAD_TRIGGER_EFFECT_MODE_MULTIPLE_POSITION_VIBRATION,
+
+  // Toolkit-internal transport marker. When used, the first 11 bytes of
+  // commandData contain the Sense controller's raw mode + 10 parameters.
+  // This value is intercepted by Toolkit and is never passed to scePad.
+  SCE_PAD_TRIGGER_EFFECT_MODE_TOOLKIT_RAW = 0xFF,
 } ScePadTriggerEffectMode;
 
 /**

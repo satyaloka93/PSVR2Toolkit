@@ -116,9 +116,12 @@ void SenseController::SendToDevice() {
     // Always enable adaptive triggers
     buffer.settings.adaptiveTriggerSetEnable = 1;
 
-    // Always enable intensity reduction and increase
+    // Always enable intensity reduction and increase. PCM clients provide their
+    // own amplitude envelope, so do not retain a stale Sony-driver reduction
+    // value that can make full-scale samples nearly imperceptible.
     buffer.settings.intensityReductionSetEnable = 1;
     buffer.settings.intensityIncreaseSetEnable = 1;
+    buffer.settings.hapticsIntensityReduction = 0;
 
     // Always enable LED setting change
     buffer.settings.statusLEDSetEnable = 1;

@@ -1,0 +1,20 @@
+PSVR2 TOOLKIT - CYBERPUNK TRIGGER + HAPTICS BRIDGE
+==================================================
+
+FIRST INSTALL
+    1. Close SteamVR completely.
+    2. Run INSTALL_RAW_TRIGGER_DRIVER.cmd.
+    3. Start SteamVR and connect both PSVR2 Sense controllers.
+    4. Install Enhanced DualSense Support and Native Settings UI for Cyberpunk.
+    5. Disable Enhanced DualSense Support's UDP autostart. Do not run DSX or UDPClient.exe.
+    6. Double-click run_bridge.cmd, then start Cyberpunk 2077.
+
+The launcher normally detects the Steam installation automatically. For a custom
+location, run this from PowerShell:
+
+    .\run_bridge.ps1 -GameRoot "D:\path\to\Cyberpunk 2077"
+
+The bridge reads DualSenseXConfig.txt directly and writes DSXData.json for the
+mod's status screen. Keep the bridge window open while playing. Ctrl+C stops it
+and resets both triggers. Do not use the mod's Restart UDP Client button; restart
+the bridge window instead.

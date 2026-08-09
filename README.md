@@ -26,7 +26,7 @@ Unofficial modification for the official PlayStation VR2 driver/app, which aims 
 - Adaptive triggers
 - Headset vibration\*
 
-For developers, we also have our own API library, which allows you to take full advantage of these features.
+For developers, we also have our own API library, which allows you to take full advantage of these features. Game mods that emit the DSX UDP trigger protocol can use the [DSX-to-Toolkit bridge](projects/psvr2_toolkit_dsx_bridge/README.md) to drive PSVR2 Sense adaptive triggers through the Toolkit CAPI.
 
 \* Certain features require [jailbreaking your headset](https://github.com/BnuuySolutions/PSVR2Toolkit/wiki/Jailbreaking-your-headset), which may have risks (such as bricking/damaging your headset, although in our testing, we have never seen this happen, yet).
 

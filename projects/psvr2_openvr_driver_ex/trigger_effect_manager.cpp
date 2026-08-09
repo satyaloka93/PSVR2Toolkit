@@ -1,6 +1,7 @@
 #include "trigger_effect_manager.h"
 #include "hmd_driver_loader.h"
 #include "custom_share_manager.h"
+#include "sense_controller.h"
 
 #include <cstring>
 
@@ -110,6 +111,16 @@ void TriggerEffectManager::Update() {
 }
 
 void TriggerEffectManager::SetTriggerEffectCommand(VRControllerType controllerType, ScePadTriggerEffectCommand command) {
+  if (command.mode == SCE_PAD_TRIGGER_EFFECT_MODE_TOOLKIT_RAW) {
+    SenseAdaptiveTriggerCommand_t raw{};
+    std::memcpy(&raw, command.commandData.offParam.padding, sizeof(raw));
+    if (controllerType == VRControllerType::Left || controllerType == VRControllerType::Both)
+      SenseController::GetLeftController().SetAdaptiveTriggerData(&raw);
+    if (controllerType == VRControllerType::Right || controllerType == VRControllerType::Both)
+      SenseController::GetRightController().SetAdaptiveTriggerData(&raw);
+    return;
+  }
+
   AstonManager *pAstonManager = AstonManager::getSingleton();
 
   if (!m_scePadSetTriggerEffect)
