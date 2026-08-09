@@ -1,7 +1,6 @@
 #include "dsx_protocol.h"
 
 #include <algorithm>
-#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -74,45 +73,16 @@ void SetOff(ScePadTriggerEffectCommand &command) {
   command.mode = SCE_PAD_TRIGGER_EFFECT_MODE_OFF;
 }
 
-void SetRaw(ScePadTriggerEffectCommand &command, const std::array<uint8_t, 11> &raw) {
-  command = {};
-  command.mode = SCE_PAD_TRIGGER_EFFECT_MODE_TOOLKIT_RAW;
-  std::memcpy(command.commandData.offParam.padding, raw.data(), raw.size());
-}
-
-void SetRawBow(ScePadTriggerEffectCommand &command, int start, int end, int strength, int snapForce) {
-  const uint16_t zones = static_cast<uint16_t>((1u << std::clamp(start, 0, 8)) | (1u << std::clamp(end, 1, 8)));
-  const uint8_t forcePair = static_cast<uint8_t>(((std::clamp(strength, 1, 8) - 1) & 7) |
-                                                  (((std::clamp(snapForce, 1, 8) - 1) & 7) << 3));
-  std::array<uint8_t, 11> raw{};
-  raw[0] = 0x22;
-  raw[1] = static_cast<uint8_t>(zones);
-  raw[2] = static_cast<uint8_t>(zones >> 8);
-  raw[3] = forcePair;
-  SetRaw(command, raw);
-}
-
-void SetRawGalloping(ScePadTriggerEffectCommand &command, int start, int end, int firstFoot, int secondFoot, int frequency) {
-  const uint16_t zones = static_cast<uint16_t>((1u << std::clamp(start, 0, 8)) | (1u << std::clamp(end, 1, 9)));
-  std::array<uint8_t, 11> raw{};
-  raw[0] = 0x23;
-  raw[1] = static_cast<uint8_t>(zones);
-  raw[2] = static_cast<uint8_t>(zones >> 8);
-  raw[3] = static_cast<uint8_t>((std::clamp(secondFoot, 1, 7) & 7) | ((std::clamp(firstFoot, 0, 6) & 7) << 3));
-  raw[4] = Frequency(frequency);
-  SetRaw(command, raw);
-}
-
-void SetRawMachine(ScePadTriggerEffectCommand &command, int start, int end, int amplitudeA, int amplitudeB, int frequency, int period) {
-  const uint16_t zones = static_cast<uint16_t>((1u << std::clamp(start, 0, 8)) | (1u << std::clamp(end, 1, 9)));
-  std::array<uint8_t, 11> raw{};
-  raw[0] = 0x27;
-  raw[1] = static_cast<uint8_t>(zones);
-  raw[2] = static_cast<uint8_t>(zones >> 8);
-  raw[3] = static_cast<uint8_t>((std::clamp(amplitudeA, 0, 7) & 7) | ((std::clamp(amplitudeB, 0, 7) & 7) << 3));
-  raw[4] = Frequency(frequency);
-  raw[5] = ClampInt<uint8_t>(period, 0, 255);
-  SetRaw(command, raw);
+void SetSenseBowCurve(ScePadTriggerEffectCommand &command, int start, int end, int strength, int snapForce) {
+  // DualSense mode 0x22 and Sense mode 0x22 do not share a parameter
+  // layout. Feeding the DualSense packed strength pair to Sense turns a
+  // normal 4/4 handgun profile into force byte 0x1b, which feels extremely
+  // stiff. Preserve the profile semantics with a gradual Sense slope instead:
+  // low take-up, increasing resistance, then a plateau until the shot event.
+  const int semanticStrength = std::clamp((2 * std::clamp(strength, 1, 8) + std::clamp(snapForce, 1, 8) + 1) / 3, 1, 8);
+  const int endStrength = std::clamp(1 + semanticStrength / 2, 1, 5);
+  const int startStrength = std::max(1, (endStrength + 1) / 3);
+  SetSlope(command, start, end, startStrength, endStrength);
 }
 
 bool FindMatching(const std::string &text, size_t open, char openChar, char closeChar, size_t &close) {
@@ -339,8 +309,7 @@ bool TranslateTriggerUpdate(const Instruction &instruction, Translation &transla
     translation.exact = true;
     break;
   case TriggerMode::Bow:
-    SetRawBow(translation.command, Param(p, 3), Param(p, 4, 8), Param(p, 5, 8), Param(p, 6, 8));
-    translation.exact = true;
+    SetSenseBowCurve(translation.command, Param(p, 3), Param(p, 4, 8), Param(p, 5, 8), Param(p, 6, 8));
     break;
   case TriggerMode::SlopeFeedback:
     SetSlope(translation.command, Param(p, 3), Param(p, 4, 8), Param(p, 5, 2), Param(p, 6, 5));
@@ -356,14 +325,26 @@ bool TranslateTriggerUpdate(const Instruction &instruction, Translation &transla
     SetVibration(translation.command, Param(p, 3), Param(p, 4, 8), Param(p, 5, 10));
     translation.exact = true;
     break;
-  case TriggerMode::Galloping:
-    SetRawGalloping(translation.command, Param(p, 3), Param(p, 4, 9), Param(p, 5, 2), Param(p, 6, 4), Param(p, 7, 10));
-    translation.exact = true;
+  case TriggerMode::Galloping: {
+    std::vector<int> amplitudes(10, 0);
+    const int start = std::clamp(Param(p, 3), 0, 9);
+    const int end = std::clamp(Param(p, 4, 9), start, 9);
+    const int amplitude = std::clamp(std::max(Param(p, 5, 2), Param(p, 6, 4)) + 1, 1, 8);
+    for (int i = start; i <= end; ++i)
+      amplitudes[i] = amplitude;
+    SetMultipleVibration(translation.command, amplitudes, 0, Param(p, 7, 10));
     break;
-  case TriggerMode::Machine:
-    SetRawMachine(translation.command, Param(p, 3), Param(p, 4, 9), Param(p, 5, 7), Param(p, 6, 4), Param(p, 7, 10), Param(p, 8));
-    translation.exact = true;
+  }
+  case TriggerMode::Machine: {
+    std::vector<int> amplitudes(10, 0);
+    const int start = std::clamp(Param(p, 3), 0, 9);
+    const int end = std::clamp(Param(p, 4, 9), start, 9);
+    const int amplitude = std::clamp((Param(p, 5, 7) + Param(p, 6, 4) + 1) / 2, 1, 8);
+    for (int i = start; i <= end; ++i)
+      amplitudes[i] = amplitude;
+    SetMultipleVibration(translation.command, amplitudes, 0, Param(p, 7, 10));
     break;
+  }
   case TriggerMode::CustomTriggerValue: {
     const int customMode = Param(p, 3);
     if (customMode == 0) {

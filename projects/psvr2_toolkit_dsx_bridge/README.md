@@ -4,7 +4,7 @@ This companion process receives the documented DSX UDP trigger protocol on local
 
 ## Use with Cyberpunk 2077
 
-Prebuilt bridge and matching raw-trigger driver packages are published by the [PSVR2Toolkit community fork](https://github.com/satyaloka93/PSVR2Toolkit/releases). The matching driver is required for native Bow, Galloping, and Machine effects; an older Toolkit driver will not understand the bridge's raw-command transport marker.
+Prebuilt bridge and matching driver packages are published by the [PSVR2Toolkit community fork](https://github.com/satyaloka93/PSVR2Toolkit/releases). Use the driver bundled with the same bridge release.
 
 1. Install and start the experimental PSVR2 Toolkit release.
 2. Start SteamVR and connect both Sense controllers.
@@ -27,7 +27,9 @@ Release packages include `run_bridge.cmd`, which discovers Cyberpunk through Ste
 
 ## Translation fidelity
 
-DSX modes 20–26 correspond to official trigger commands and translate directly. Legacy DSX convenience modes such as `Resistance`, `SemiAutomaticGun`, and `AutomaticGun` also have direct equivalents. Toolkit's raw trigger transport preserves the native Sense command bytes for `Bow` (0x22), `Galloping` (0x23), and `Machine` (0x27), including snap force, alternating amplitudes, frequency, and period. `CustomTriggerValue` remains a safe approximation because it manipulates firmware/control flags rather than defining a normal physical effect.
+DSX modes 20–26 correspond to official trigger commands and translate directly. Legacy DSX convenience modes such as `Resistance`, `SemiAutomaticGun`, and `AutomaticGun` also have direct equivalents. DualSense and PSVR2 Sense reuse custom mode numbers `0x22`, `0x23`, and `0x27` but do **not** use the same parameter layouts. Passing DSX's packed Bow force pair directly to Sense can turn an ordinary `4/4` handgun profile into force byte `0x1b`, causing the stiff, chunky response reported in testing.
+
+The Sense-tuned path therefore maps Bow to a weapon-specific gradual slope: light take-up, increasing resistance, a short plateau, and motor release on the shot event. Profile start/end/strength values still distinguish individual weapons. Galloping and Machine use safe official trigger vibration while their timing detail is reproduced by grip PCM rather than unverified raw bytes. `CustomTriggerValue` remains a safe approximation because it manipulates firmware/control flags rather than defining a normal physical effect.
 
 The bridge also synthesizes grip PCM haptics from Cyberpunk's weapon-effect transitions: overdriven recoil impacts for semi-auto/shotgun transitions and sustained shot-rate textures for automatic, Machine, and Galloping effects. PCM is signed 8-bit at 3000 Hz, and the carrier is intentionally clipped similarly to Toolkit's native OpenVR haptic generator. These are gameplay-derived effects, not Cyberpunk's original DualSense audio waveform. DSX RGB/player LED commands are ignored.
 

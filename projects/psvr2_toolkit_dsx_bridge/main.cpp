@@ -174,8 +174,10 @@ struct HapticTriggerState {
   std::vector<int> parameters;
 };
 
-void UpdateCyberpunkHaptics(const std::vector<psvr2_toolkit::dsx::Instruction> &instructions,
-                            std::array<HapticTriggerState, 2> &states, psvr2_toolkit::bridge::HapticsEngine &haptics) {
+std::array<bool, 2> UpdateCyberpunkHaptics(const std::vector<psvr2_toolkit::dsx::Instruction> &instructions,
+                                           std::array<HapticTriggerState, 2> &states,
+                                           psvr2_toolkit::bridge::HapticsEngine &haptics) {
+  std::array<bool, 2> firingBreaks{};
   for (const auto &instruction : instructions) {
     if (instruction.type != static_cast<int>(psvr2_toolkit::dsx::InstructionType::TriggerUpdate) || instruction.parameters.size() < 3)
       continue;
@@ -218,10 +220,13 @@ void UpdateCyberpunkHaptics(const std::vector<psvr2_toolkit::dsx::Instruction> &
                                            previous.mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::Weapon) ||
                                            previous.mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::SemiAutomaticGun);
       if (previousWasLoadedWeapon && mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::Resistance)) {
-        const float impact = std::clamp(0.72f + InstructionParam(instruction, 4, 4) / 8.0f * 0.28f, 0.72f, 1.0f);
-        haptics.Pulse(controller, impact, 115, 125.0f);
+        firingBreaks[sideIndex] = true;
+        const float profileStrength = static_cast<float>(previous.parameters.size() > 5 ? previous.parameters[5] : 4);
+        const float snapForce = static_cast<float>(previous.parameters.size() > 6 ? previous.parameters[6] : 4);
+        const float impact = std::clamp(0.52f + (2.0f * profileStrength + snapForce) / 24.0f * 0.30f, 0.52f, 0.82f);
+        haptics.Pulse(controller, impact, 105, 125.0f);
         // A smaller pulse in the support hand makes long guns feel two-handed.
-        haptics.Pulse(sideValue == 2 ? VRControllerType::Left : VRControllerType::Right, impact * 0.68f, 90, 115.0f);
+        haptics.Pulse(sideValue == 2 ? VRControllerType::Left : VRControllerType::Right, impact * 0.52f, 75, 115.0f);
       } else if (mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::SemiAutomaticGun)) {
         haptics.Pulse(controller, 0.68f, 55, 170.0f);
       }
@@ -229,9 +234,11 @@ void UpdateCyberpunkHaptics(const std::vector<psvr2_toolkit::dsx::Instruction> &
 
     previous = {true, mode, instruction.parameters};
   }
+  return firingBreaks;
 }
 
-void ApplyInstructions(const std::vector<psvr2_toolkit::dsx::Instruction> &instructions, uint64_t &translatedCount) {
+void ApplyInstructions(const std::vector<psvr2_toolkit::dsx::Instruction> &instructions, uint64_t &translatedCount,
+                       const std::array<bool, 2> *firingBreaks = nullptr) {
   for (const auto &instruction : instructions) {
     if (instruction.type == static_cast<int>(psvr2_toolkit::dsx::InstructionType::ResetToUserSettings)) {
       ResetTriggers();
@@ -245,6 +252,18 @@ void ApplyInstructions(const std::vector<psvr2_toolkit::dsx::Instruction> &instr
     if (!psvr2_toolkit::dsx::TranslateTriggerUpdate(instruction, translation, &translationError)) {
       std::cerr << "Ignored trigger command: " << translationError << '\n';
       continue;
+    }
+
+    const int sideValue = InstructionParam(instruction, 1);
+    if (firingBreaks && sideValue >= 1 && sideValue <= 2 && (*firingBreaks)[static_cast<size_t>(sideValue - 1)]) {
+      // The best PSVR2 gun implementations ramp and plateau while pulling,
+      // then drop resistance at the actual shot. Enhanced DualSense Support
+      // signals that edge by changing a loaded Bow/Weapon profile to
+      // Resistance. Release the motor until the mod restores the loaded curve.
+      translation.command = {};
+      translation.command.mode = SCE_PAD_TRIGGER_EFFECT_MODE_OFF;
+      translation.description += " -> firing release";
+      translation.exact = false;
     }
 
     psvr2_toolkit_set_trigger_effect(translation.controllerType, translation.command);
@@ -345,8 +364,8 @@ int main(int argc, char **argv) {
         std::vector<psvr2_toolkit::dsx::Instruction> fileInstructions;
         std::string configError;
         if (input && psvr2_toolkit::cyberpunk::ParseConfig(contents.str(), fileInstructions, &configError)) {
-          UpdateCyberpunkHaptics(fileInstructions, hapticStates, haptics);
-          ApplyInstructions(fileInstructions, translatedCount);
+          const auto firingBreaks = UpdateCyberpunkHaptics(fileInstructions, hapticStates, haptics);
+          ApplyInstructions(fileInstructions, translatedCount, &firingBreaks);
           cyberpunkWriteTime = writeTime;
           cyberpunkConfigApplied = true;
         }
