@@ -17,6 +17,20 @@ Prebuilt bridge and matching driver packages are published by the [PSVR2Toolkit 
 6. Start Cyberpunk 2077. The bridge logs each translated L2/R2 command and publishes `DSXData.json` status for the mod menu.
 7. Stop the bridge with Ctrl+C; it sends `Off` to both triggers before releasing its CAPI slot.
 
+### Recommended Sense weapon overrides
+
+Enhanced DualSense Support labels its per-category override page **Not Recommended** because replacing its defaults discards some hand-tuned, per-model DualSense effects. That warning is reasonable for a DualSense, but those defaults use complex mechanics that do not transfer cleanly to the smaller PSVR2 Sense trigger. Direct official presets can feel substantially better on Sense.
+
+The first tested PSVR2 profile is:
+
+| Enhanced DualSense Support category | Override | Stored value |
+|---|---|---:|
+| Handguns | Very Soft | 4 |
+| Shotgun | Hard | 7 |
+| Submachine Gun | Choppy | 3 |
+
+These are intentional compatibility choices, not unsafe settings. They affect R2 while preserving the mod's gameplay state and L2 behavior. Double-barrel, light-machine-gun, and heavy-machine-gun categories remain uncalibrated and should stay Default until tested. Back up `config/settings.json` before broad changes.
+
 The bridge can also listen for standard DSX UDP packets on `127.0.0.1`. It uses port `6969` by default and publishes both current and legacy DSX port files so compatible applications can find it. Override this with `--port PORT`.
 
 Release packages include `run_bridge.cmd`, which discovers Cyberpunk through Steam. For an unusual installation location, use:
