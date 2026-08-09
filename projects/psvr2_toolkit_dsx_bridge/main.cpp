@@ -7,9 +7,11 @@
 #endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <tlhelp32.h>
 #include <windows.h>
 #endif
 
+#include "audio_haptics_capture.h"
 #include "cyberpunk_config.h"
 #include "dsx_protocol.h"
 #include "haptics_engine.h"
@@ -93,6 +95,8 @@ void PublishPort(uint16_t port) {
 struct Options {
   uint16_t port = 6969;
   std::filesystem::path cyberpunkConfig;
+  bool gameAudioHaptics = true;
+  float gameAudioGain = 1.35f;
 };
 
 Options ResolveOptions(int argc, char **argv) {
@@ -110,14 +114,48 @@ Options ResolveOptions(int argc, char **argv) {
       options.cyberpunkConfig = argv[++i];
       continue;
     }
+    if (argument == "--no-game-audio-haptics") {
+      options.gameAudioHaptics = false;
+      continue;
+    }
+    if (argument == "--audio-haptics-gain" && i + 1 < argc) {
+      options.gameAudioGain = std::stof(argv[++i]);
+      if (options.gameAudioGain < 0.0f || options.gameAudioGain > 3.0f)
+        throw std::runtime_error("audio haptics gain must be between 0 and 3");
+      continue;
+    }
     if (argument == "--help" || argument == "-h") {
       std::cout << "Usage: psvr2_toolkit_dsx_bridge [--port PORT] [--cyberpunk-config FILE]\n"
-                   "Receives DSX UDP commands and can directly monitor Enhanced DualSense Support's config.\n";
+                   "       [--audio-haptics-gain 0..3] [--no-game-audio-haptics]\n"
+                   "Receives DSX UDP commands, monitors Enhanced DualSense Support, and converts game audio to grip haptics.\n";
       std::exit(0);
     }
     throw std::runtime_error("unknown argument: " + argument);
   }
   return options;
+}
+
+bool IsCyberpunkRunning() {
+#ifdef _WIN32
+  const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot == INVALID_HANDLE_VALUE)
+    return false;
+  PROCESSENTRY32W entry{};
+  entry.dwSize = sizeof(entry);
+  bool found = false;
+  if (Process32FirstW(snapshot, &entry)) {
+    do {
+      if (_wcsicmp(entry.szExeFile, L"Cyberpunk2077.exe") == 0) {
+        found = true;
+        break;
+      }
+    } while (Process32NextW(snapshot, &entry));
+  }
+  CloseHandle(snapshot);
+  return found;
+#else
+  return false;
+#endif
 }
 
 SocketHandle OpenServer(uint16_t port) {
@@ -219,16 +257,32 @@ std::array<bool, 2> UpdateCyberpunkHaptics(const std::vector<psvr2_toolkit::dsx:
       const bool previousWasLoadedWeapon = previous.mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::Bow) ||
                                            previous.mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::Weapon) ||
                                            previous.mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::SemiAutomaticGun);
-      if (previousWasLoadedWeapon && mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::Resistance)) {
+      const int previousEnd = previous.parameters.size() > 4 ? previous.parameters[4] : 0;
+      const int currentEnd = instruction.parameters.size() > 4 ? instruction.parameters[4] : 0;
+      // Many shotguns keep mode=Bow while moving the breakpoint two or more
+      // zones deeper during recoil. Treat that parameter edge as a shot too.
+      const bool bowRecoilEdge = previous.mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::Bow) &&
+                                 mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::Bow) && currentEnd >= previousEnd + 2;
+      const bool loadedToImpactMode = previousWasLoadedWeapon &&
+                                      (mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::Resistance) ||
+                                       mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::Machine));
+      if (loadedToImpactMode || bowRecoilEdge) {
         firingBreaks[sideIndex] = true;
         const float profileStrength = static_cast<float>(previous.parameters.size() > 5 ? previous.parameters[5] : 4);
         const float snapForce = static_cast<float>(previous.parameters.size() > 6 ? previous.parameters[6] : 4);
-        const float impact = std::clamp(0.52f + (2.0f * profileStrength + snapForce) / 24.0f * 0.30f, 0.52f, 0.82f);
-        haptics.Pulse(controller, impact, 105, 125.0f);
-        // A smaller pulse in the support hand makes long guns feel two-handed.
-        haptics.Pulse(sideValue == 2 ? VRControllerType::Left : VRControllerType::Right, impact * 0.52f, 75, 115.0f);
+        const float weaponWeight = std::clamp((2.0f * profileStrength + snapForce) / 24.0f, 0.25f, 1.0f);
+        const float impact = 0.72f + weaponWeight * 0.28f;
+        const bool heavyImpact = profileStrength >= 7.0f || snapForce >= 7.0f;
+        haptics.Pulse(controller, impact, heavyImpact ? 190 : 125, heavyImpact ? 72.0f : 115.0f);
+        // A support-hand impulse differentiates long guns and shotguns.
+        haptics.Pulse(sideValue == 2 ? VRControllerType::Left : VRControllerType::Right,
+                      impact * (heavyImpact ? 0.82f : 0.62f), heavyImpact ? 155 : 90, heavyImpact ? 68.0f : 105.0f);
       } else if (mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::SemiAutomaticGun)) {
-        haptics.Pulse(controller, 0.68f, 55, 170.0f);
+        haptics.Pulse(controller, 0.82f, 75, 155.0f);
+      } else if (previous.mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::Resistance) &&
+                 mode == static_cast<int>(psvr2_toolkit::dsx::TriggerMode::Resistance) &&
+                 InstructionParam(instruction, 4) >= (previous.parameters.size() > 4 ? previous.parameters[4] : 0) + 3) {
+        haptics.Pulse(controller, 0.82f, 110, 90.0f);
       }
     }
 
@@ -331,10 +385,21 @@ int main(int argc, char **argv) {
 
   PublishPort(options.port);
   psvr2_toolkit::bridge::HapticsEngine haptics;
-  if (haptics.Start())
+  const bool pcmAvailable = haptics.Start();
+  if (pcmAvailable)
     std::cout << "Cyberpunk grip PCM haptics enabled.\n";
   else
     std::cerr << "PCM haptics unavailable in this Toolkit CAPI build.\n";
+
+  psvr2_toolkit::bridge::AudioHapticsCapture audioHaptics;
+  bool audioHapticsAvailable = false;
+  if (pcmAvailable && options.gameAudioHaptics) {
+    audioHapticsAvailable = audioHaptics.Start(&haptics, options.gameAudioGain);
+    if (audioHapticsAvailable)
+      std::cout << "Full-game audio haptics enabled at gain " << options.gameAudioGain << ".\n";
+    else
+      std::cerr << "Full-game audio haptics unavailable: " << audioHaptics.LastError() << '\n';
+  }
   std::signal(SIGINT, StopSignal);
   std::signal(SIGTERM, StopSignal);
 #ifdef _WIN32
@@ -353,6 +418,7 @@ int main(int argc, char **argv) {
   bool cyberpunkConfigApplied = false;
   std::array<HapticTriggerState, 2> hapticStates{};
   auto lastStatusWrite = std::chrono::steady_clock::time_point{};
+  bool audioHapticsGameActive = false;
   while (g_running) {
     if (!options.cyberpunkConfig.empty()) {
       std::error_code fileError;
@@ -374,6 +440,14 @@ int main(int argc, char **argv) {
       const auto now = std::chrono::steady_clock::now();
       if (now - lastStatusWrite >= std::chrono::seconds(1)) {
         PublishCyberpunkStatus(options.cyberpunkConfig);
+        if (audioHapticsAvailable) {
+          const bool gameRunning = IsCyberpunkRunning();
+          audioHaptics.SetEnabled(gameRunning);
+          if (gameRunning != audioHapticsGameActive) {
+            std::cout << "Full-game audio haptics " << (gameRunning ? "active." : "paused (Cyberpunk is not running).") << std::endl;
+            audioHapticsGameActive = gameRunning;
+          }
+        }
         lastStatusWrite = now;
       }
     }
@@ -409,6 +483,7 @@ int main(int argc, char **argv) {
   }
 
   std::cout << "Stopping after " << packetCount << " packets and " << translatedCount << " trigger updates.\n";
+  audioHaptics.Stop();
   haptics.Stop();
   ResetTriggers();
   psvr2_toolkit_deinit();

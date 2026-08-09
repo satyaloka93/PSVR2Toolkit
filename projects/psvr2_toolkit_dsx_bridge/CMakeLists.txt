@@ -1,5 +1,7 @@
 add_executable(psvr2_toolkit_dsx_bridge
   main.cpp
+  audio_haptics_capture.cpp
+  audio_haptics_capture.h
   cyberpunk_config.cpp
   cyberpunk_config.h
   haptics_engine.cpp
@@ -12,7 +14,7 @@ target_include_directories(psvr2_toolkit_dsx_bridge PRIVATE ${CMAKE_CURRENT_SOUR
 target_link_libraries(psvr2_toolkit_dsx_bridge PRIVATE common psvr2_toolkit_capi_loader)
 
 if(WIN32)
-  target_link_libraries(psvr2_toolkit_dsx_bridge PRIVATE ws2_32)
+  target_link_libraries(psvr2_toolkit_dsx_bridge PRIVATE ws2_32 ole32)
 endif()
 
 option(PSVR2TK_BUILD_DSX_TESTS "Build DSX protocol unit tests" OFF)

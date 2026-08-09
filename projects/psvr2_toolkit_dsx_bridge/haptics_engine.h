@@ -4,7 +4,9 @@
 
 #include <array>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <mutex>
 #include <thread>
 
@@ -23,6 +25,11 @@ public:
   void SetRhythm(VRControllerType controller, float amplitude, float rateHz);
   void ClearRhythm(VRControllerType controller);
   void Pulse(VRControllerType controller, float amplitude, uint32_t durationMs, float carrierHz = 135.0f);
+
+  // Queues interleaved stereo game-audio samples already converted to 3000 Hz
+  // normalized PCM. Audio is mixed with semantic weapon/vehicle effects.
+  void PushGameAudio(const float *interleavedStereo, size_t frameCount);
+  void ClearGameAudio();
 
 private:
   struct Channel {
@@ -45,6 +52,7 @@ private:
   }
 
   std::array<Channel, 2> m_channels{};
+  std::array<std::deque<float>, 2> m_gameAudio;
   std::mutex m_mutex;
   std::atomic<bool> m_running{false};
   std::thread m_thread;

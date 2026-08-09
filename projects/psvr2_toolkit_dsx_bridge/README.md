@@ -31,7 +31,12 @@ DSX modes 20–26 correspond to official trigger commands and translate directly
 
 The Sense-tuned path therefore maps Bow to a weapon-specific gradual slope: light take-up, increasing resistance, a short plateau, and motor release on the shot event. Profile start/end/strength values still distinguish individual weapons. Galloping and Machine use safe official trigger vibration while their timing detail is reproduced by grip PCM rather than unverified raw bytes. `CustomTriggerValue` remains a safe approximation because it manipulates firmware/control flags rather than defining a normal physical effect.
 
-The bridge also synthesizes grip PCM haptics from Cyberpunk's weapon-effect transitions: overdriven recoil impacts for semi-auto/shotgun transitions and sustained shot-rate textures for automatic, Machine, and Galloping effects. PCM is signed 8-bit at 3000 Hz, and the carrier is intentionally clipped similarly to Toolkit's native OpenVR haptic generator. These are gameplay-derived effects, not Cyberpunk's original DualSense audio waveform. DSX RGB/player LED commands are ignored.
+Grip PCM combines two layers:
+
+- **Full-game audio haptics:** Windows WASAPI loopback captures the active default output only while `Cyberpunk2077.exe` is running. A 28–320 Hz tactile band, transient detector, compression, and stereo downsampling convert gunshots, explosions, impacts, vehicles, environmental bass, and other game audio to signed 8-bit 3000 Hz Sense PCM.
+- **Semantic effects:** weapon-profile transitions add explicit handgun/revolver recoil, heavy two-hand shotgun impulses, automatic-fire rhythms, charge textures, and trigger-release timing even when the audio mix is quiet.
+
+Use `--audio-haptics-gain 0..3` to tune the full-game layer (default `1.35`), or `--no-game-audio-haptics` to disable it. The audio-derived layer is intentionally broader than the previous trigger-only synthesis, but it is still not Cyberpunk's inaccessible original DualSense waveform. DSX RGB/player LED commands are ignored.
 
 ## Troubleshooting
 

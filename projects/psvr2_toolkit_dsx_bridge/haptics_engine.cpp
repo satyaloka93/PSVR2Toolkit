@@ -61,11 +61,32 @@ void HapticsEngine::Pulse(VRControllerType controller, float amplitude, uint32_t
     const uint32_t samples = std::max<uint32_t>(1, durationMs * 3);
     if (amplitude >= channel.pulseAmplitude || channel.pulseSamplesLeft == 0) {
       channel.pulseAmplitude = std::clamp(amplitude, 0.0f, 1.0f);
-      channel.pulseCarrierHz = std::clamp(carrierHz, 60.0f, 300.0f);
+      channel.pulseCarrierHz = std::clamp(carrierHz, 45.0f, 300.0f);
       channel.pulseSamplesLeft = samples;
       channel.pulseSamplesTotal = samples;
     }
   });
+}
+
+void HapticsEngine::PushGameAudio(const float *interleavedStereo, size_t frameCount) {
+  if (!interleavedStereo || frameCount == 0)
+    return;
+  std::scoped_lock lock(m_mutex);
+  constexpr size_t kMaximumQueuedFrames = 6000;
+  for (size_t i = 0; i < frameCount; ++i) {
+    m_gameAudio[0].push_back(std::clamp(interleavedStereo[i * 2], -1.0f, 1.0f));
+    m_gameAudio[1].push_back(std::clamp(interleavedStereo[i * 2 + 1], -1.0f, 1.0f));
+  }
+  for (auto &queue : m_gameAudio) {
+    while (queue.size() > kMaximumQueuedFrames)
+      queue.pop_front();
+  }
+}
+
+void HapticsEngine::ClearGameAudio() {
+  std::scoped_lock lock(m_mutex);
+  for (auto &queue : m_gameAudio)
+    queue.clear();
 }
 
 void HapticsEngine::Run() {
@@ -83,12 +104,16 @@ void HapticsEngine::Run() {
       for (size_t side = 0; side < m_channels.size(); ++side) {
         Channel &channel = m_channels[side];
         auto &buffer = side == 0 ? left : right;
-        active[side] = channel.rhythmAmplitude > 0.0f || channel.pulseSamplesLeft > 0;
+        active[side] = channel.rhythmAmplitude > 0.0f || channel.pulseSamplesLeft > 0 || !m_gameAudio[side].empty();
         if (!active[side])
           continue;
 
         for (size_t i = 0; i < kChunkSize; ++i) {
           double sample = 0.0;
+          if (!m_gameAudio[side].empty()) {
+            sample += m_gameAudio[side].front();
+            m_gameAudio[side].pop_front();
+          }
           if (channel.rhythmAmplitude > 0.0f) {
             // A resonant carrier with a narrow attack envelope gives distinct
             // automatic-fire impacts instead of a featureless low buzz.

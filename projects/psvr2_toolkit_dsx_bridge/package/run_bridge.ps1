@@ -51,5 +51,6 @@ if (-not (Test-Path -LiteralPath $config)) {
 $bridge = Join-Path $PSScriptRoot 'psvr2_toolkit_dsx_bridge.exe'
 Write-Host "Cyberpunk config: $config"
 Write-Host "DSX UDP port: $Port"
-& $bridge --port $Port --cyberpunk-config $config
+$log = Join-Path $PSScriptRoot 'bridge.log'
+& $bridge --port $Port --cyberpunk-config $config 2>&1 | Tee-Object -FilePath $log
 exit $LASTEXITCODE
