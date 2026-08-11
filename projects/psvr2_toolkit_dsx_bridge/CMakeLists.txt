@@ -6,6 +6,8 @@ add_executable(psvr2_toolkit_dsx_bridge
   cyberpunk_config.h
   haptics_engine.cpp
   haptics_engine.h
+  vr_motion_haptics.cpp
+  vr_motion_haptics.h
   dsx_protocol.cpp
   dsx_protocol.h
 )

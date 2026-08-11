@@ -12,6 +12,7 @@
 #endif
 
 #include "audio_haptics_capture.h"
+#include "vr_motion_haptics.h"
 #include "cyberpunk_config.h"
 #include "dsx_protocol.h"
 #include "haptics_engine.h"
@@ -97,6 +98,8 @@ struct Options {
   std::filesystem::path cyberpunkConfig;
   bool gameAudioHaptics = true;
   float gameAudioGain = 1.35f;
+  bool vrMotionHaptics = true;
+  float vrMotionGain = 1.0f;
 };
 
 Options ResolveOptions(int argc, char **argv) {
@@ -124,9 +127,20 @@ Options ResolveOptions(int argc, char **argv) {
         throw std::runtime_error("audio haptics gain must be between 0 and 3");
       continue;
     }
+    if (argument == "--no-vr-motion-haptics") {
+      options.vrMotionHaptics = false;
+      continue;
+    }
+    if (argument == "--vr-motion-gain" && i + 1 < argc) {
+      options.vrMotionGain = std::stof(argv[++i]);
+      if (options.vrMotionGain < 0.0f || options.vrMotionGain > 3.0f)
+        throw std::runtime_error("vr motion gain must be between 0 and 3");
+      continue;
+    }
     if (argument == "--help" || argument == "-h") {
       std::cout << "Usage: psvr2_toolkit_dsx_bridge [--port PORT] [--cyberpunk-config FILE]\n"
                    "       [--audio-haptics-gain 0..3] [--no-game-audio-haptics]\n"
+                   "       [--vr-motion-gain 0..3] [--no-vr-motion-haptics]\n"
                    "Receives DSX UDP commands, monitors Enhanced DualSense Support, and converts game audio to grip haptics.\n";
       std::exit(0);
     }
@@ -400,6 +414,17 @@ int main(int argc, char **argv) {
     else
       std::cerr << "Full-game audio haptics unavailable: " << audioHaptics.LastError() << '\n';
   }
+  // Melee swing/impact from the CyberpunkVR Port plugin. Routed through the same engine as the
+  // audio and semantic layers so the three mix instead of competing for the actuators.
+  psvr2_toolkit::bridge::VRMotionHaptics vrMotion;
+  if (pcmAvailable && options.vrMotionHaptics) {
+    if (vrMotion.Start(&haptics, options.vrMotionGain))
+      std::cout << "VR motion haptics watcher enabled at gain " << options.vrMotionGain
+                << " (waits for Cyberpunk).\n";
+    else
+      std::cerr << "VR motion haptics unavailable: " << vrMotion.LastError() << '\n';
+  }
+
   std::signal(SIGINT, StopSignal);
   std::signal(SIGTERM, StopSignal);
 #ifdef _WIN32
@@ -483,6 +508,7 @@ int main(int argc, char **argv) {
   }
 
   std::cout << "Stopping after " << packetCount << " packets and " << translatedCount << " trigger updates.\n";
+  vrMotion.Stop();
   audioHaptics.Stop();
   haptics.Stop();
   ResetTriggers();

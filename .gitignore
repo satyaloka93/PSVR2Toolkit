@@ -405,3 +405,6 @@ FodyWeavers.xsd
 # CMake
 build/*
 out/*
+
+# Local VS-generator build tree (the repo presets use Ninja).
+build-vs/
