@@ -15,6 +15,14 @@ location, run this from PowerShell:
     .\run_bridge.ps1 -GameRoot "D:\path\to\Cyberpunk 2077"
 
 The bridge reads DualSenseXConfig.txt directly and writes DSXData.json for the
-mod's status screen. Keep the bridge window open while playing. Ctrl+C stops it
-and resets both triggers. Do not use the mod's Restart UDP Client button; restart
-the bridge window instead.
+mod's status screen. A matching CyberpunkVR Port build also prints:
+
+    VR motion haptics protocol v1 active (driving-safe slot layout).
+
+If it reports an incompatible layout, only VR motion pulses stay paused; the guard
+prevents buttons, trigger travel, or driving state from becoming haptic floods.
+Gun/audio/vehicle haptics and adaptive triggers remain independent.
+
+Keep the bridge window open while playing. Ctrl+C stops it and resets both
+triggers. Do not use the mod's Restart UDP Client button; restart the bridge
+window instead.
