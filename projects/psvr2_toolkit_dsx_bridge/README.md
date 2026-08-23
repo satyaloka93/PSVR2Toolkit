@@ -58,6 +58,7 @@ Grip PCM combines two layers:
 
 - **Full-game audio haptics:** Windows WASAPI loopback captures the active default output only while `Cyberpunk2077.exe` is running. A 28–320 Hz tactile band, transient detector, compression, and stereo downsampling convert gunshots, explosions, impacts, vehicles, environmental bass, and other game audio to signed 8-bit 3000 Hz Sense PCM.
 - **Semantic effects:** weapon-profile transitions add explicit handgun/revolver recoil, heavy two-hand shotgun impulses, automatic-fire rhythms, charge textures, and trigger-release timing even when the audio mix is quiet.
+- **VR motion effects:** a compatible CyberpunkVR Port publishes melee swing/impact requests through shared slots `[157..160]`. The watcher now requires protocol magic/version plus a live frame heartbeat before reading them. This fails closed with older or incompatible game DLLs instead of interpreting face buttons, trigger travel, or driving state as a pulse flood. The bridge remains the sole actuator owner; motion pulses mix in `HapticsEngine` with gun, audio, and vehicle feedback.
 
 Use `--audio-haptics-gain 0..3` to tune the full-game layer (default `1.35`), or `--no-game-audio-haptics` to disable it. The audio-derived layer is intentionally broader than the previous trigger-only synthesis, but it is still not Cyberpunk's inaccessible original DualSense waveform. DSX RGB/player LED commands are ignored.
 
@@ -67,5 +68,7 @@ Use `--audio-haptics-gain 0..3` to tune the full-game layer (default `1.35`), or
 - **UDP bind failed:** close DSX or select a free port with `--port`.
 - **No commands appear:** confirm the Cyberpunk mod is enabled and that `--cyberpunk-config` points to its generated `DualSenseXConfig.txt`.
 - **No grip haptics:** confirm the bridge prints `Cyberpunk grip PCM haptics enabled`; the installed Toolkit CAPI must expose PCM functions.
+- **`VR motion haptics paused: incompatible ...`:** update CyberpunkVR Port to a build publishing protocol v1. The guard intentionally refuses unversioned `[157..160]`; gun, audio, adaptive-trigger, and vehicle effects continue independently.
+- **`VR motion haptics paused: ... heartbeat is stale`:** Cyberpunk is closed, loading, or its OpenXR frame publisher stopped. Motion pulses resume after a fresh heartbeat without replaying the old record.
 - **Cyberpunk's Restart UDP Client button:** do not use it in direct-monitor mode; restart the bridge window instead.
 - **Effects remain after a crash:** restart the bridge and exit with Ctrl+C, or restart SteamVR.

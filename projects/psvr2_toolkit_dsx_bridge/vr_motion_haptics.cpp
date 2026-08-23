@@ -2,9 +2,11 @@
 
 #include "common.h"
 #include "haptics_engine.h"
+#include "vr_motion_protocol.h"
 
 #include <algorithm>
 #include <chrono>
+#include <iostream>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -16,10 +18,7 @@ namespace {
 constexpr const char *kMappingName = "CyberpunkVR_Hands_Shared";
 constexpr size_t kMappingBytes = 1024;
 
-constexpr int kSlotSequence = 157;
-constexpr int kSlotHand = 158;
-constexpr int kSlotAmplitude = 159;
-constexpr int kSlotDurationMs = 160;
+using namespace vrmotion;
 
 // Poll fast enough that a swing feels attached to the motion. At 90 Hz a frame is ~11 ms, so
 // 4 ms keeps the pulse inside the frame that produced it while costing nothing measurable.
@@ -27,6 +26,9 @@ constexpr auto kPollInterval = std::chrono::milliseconds(4);
 
 // Retry the mapping while the game is closed. The bridge is normally started first.
 constexpr auto kAttachRetryInterval = std::chrono::milliseconds(1000);
+// FlushHandsToShared advances the heartbeat every OpenXR frame. A one-second timeout tolerates
+// loading stalls while still rejecting a stale mapping retained after Cyberpunk exits.
+constexpr auto kHeartbeatTimeout = std::chrono::milliseconds(1000);
 
 // Short pulses read as a whoosh, longer ones as contact. Splitting on the plugin's own
 // duration keeps the choice of carrier here rather than making the plugin know about Sense
@@ -53,9 +55,13 @@ bool VRMotionHaptics::AttachMapping() {
   }
   m_mapping = handle;
   m_shared = static_cast<const float *>(view);
-  // Adopt the current sequence rather than firing for whatever happened before we attached.
-  m_lastSequence = m_shared[kSlotSequence];
-  m_haveSequence = true;
+  // Do not trust the existing sequence yet. This mapping may have survived an earlier game process
+  // because the bridge itself held the final handle open. Protocol activation requires a compatible
+  // marker AND a heartbeat change from the currently running plugin.
+  m_lastHeartbeat = m_shared[kSlotProtocolHeartbeat];
+  m_haveHeartbeat = true;
+  m_haveSequence = false;
+  m_protocolReady = false;
   return true;
 #else
   return false;
@@ -74,6 +80,8 @@ void VRMotionHaptics::DetachMapping() {
   }
 #endif
   m_haveSequence = false;
+  m_haveHeartbeat = false;
+  m_protocolReady = false;
 }
 
 bool VRMotionHaptics::Start(HapticsEngine *engine, float gain) {
@@ -108,14 +116,56 @@ void VRMotionHaptics::Stop() {
 void VRMotionHaptics::Run() {
 #ifdef _WIN32
   auto nextAttach = std::chrono::steady_clock::now();
+  auto heartbeatAt = std::chrono::steady_clock::now();
 
   while (m_running.load(std::memory_order_acquire)) {
+    const auto now = std::chrono::steady_clock::now();
     if (!m_shared) {
-      const auto now = std::chrono::steady_clock::now();
       if (now >= nextAttach) {
         nextAttach = now + kAttachRetryInterval;
-        AttachMapping();
+        if (AttachMapping()) heartbeatAt = now;
       }
+      std::this_thread::sleep_for(kPollInterval);
+      continue;
+    }
+
+    const bool markerValid = MarkerValid(m_shared);
+    const float heartbeat = m_shared[kSlotProtocolHeartbeat];
+    if (!markerValid) {
+      m_protocolReady = false;
+      m_haveSequence = false;
+      if (!m_incompatibleLogged) {
+        std::cerr << "VR motion haptics paused: incompatible CyberpunkVR shared-slot layout; "
+                     "input/driving values will not be treated as pulses.\n";
+        m_incompatibleLogged = true;
+      }
+      std::this_thread::sleep_for(kPollInterval);
+      continue;
+    }
+
+    if (!m_haveHeartbeat || heartbeat != m_lastHeartbeat) {
+      m_lastHeartbeat = heartbeat;
+      m_haveHeartbeat = true;
+      heartbeatAt = now;
+      if (!m_protocolReady) {
+        // Adopt sequence on activation so a record left by the previous process is never replayed.
+        m_lastSequence = m_shared[kSlotSequence];
+        m_haveSequence = true;
+        m_protocolReady = true;
+        m_staleLogged = false;
+        std::cout << "VR motion haptics protocol v1 active (driving-safe slot layout).\n";
+      }
+    } else if (now - heartbeatAt > kHeartbeatTimeout) {
+      m_protocolReady = false;
+      m_haveSequence = false;
+      if (!m_staleLogged) {
+        std::cerr << "VR motion haptics paused: CyberpunkVR heartbeat is stale; gun/audio/vehicle "
+                     "bridge effects remain independent.\n";
+        m_staleLogged = true;
+      }
+    }
+
+    if (!m_protocolReady) {
       std::this_thread::sleep_for(kPollInterval);
       continue;
     }
@@ -133,8 +183,7 @@ void VRMotionHaptics::Run() {
 
       // The mapping outlives the game process; a torn or stale record must not reach the
       // actuators as a maximum-strength pulse.
-      if (rawAmplitude > 0.0f && rawAmplitude <= 1.0f && rawDuration >= 1.0f &&
-          rawDuration <= 1000.0f) {
+      if (PayloadValid(rawAmplitude, rawDuration)) {
         const float amplitude = std::clamp(rawAmplitude * m_gain, 0.0f, 1.0f);
         const auto durationMs = static_cast<uint32_t>(rawDuration);
         const float carrierHz =

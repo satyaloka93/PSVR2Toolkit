@@ -8,6 +8,7 @@ add_executable(psvr2_toolkit_dsx_bridge
   haptics_engine.h
   vr_motion_haptics.cpp
   vr_motion_haptics.h
+  vr_motion_protocol.h
   dsx_protocol.cpp
   dsx_protocol.h
 )
@@ -24,6 +25,7 @@ if(PSVR2TK_BUILD_DSX_TESTS)
   enable_testing()
   add_executable(psvr2_toolkit_dsx_protocol_test
     protocol_test.cpp
+    vr_motion_protocol.h
     cyberpunk_config.cpp
     cyberpunk_config.h
     dsx_protocol.cpp

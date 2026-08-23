@@ -1,6 +1,8 @@
 #include "cyberpunk_config.h"
 #include "dsx_protocol.h"
+#include "vr_motion_protocol.h"
 
+#include <array>
 #include <cassert>
 #include <iostream>
 #include <string>
@@ -90,6 +92,19 @@ int main() {
   assert(instructions.size() == 2);
   assert(instructions[0].parameters == std::vector<int>({0, 1, 13, 0, 3}));
   assert(instructions[1].parameters == std::vector<int>({0, 2, 14, 1, 4, 5, 4}));
+
+  // Shared-memory haptics must fail closed unless the game publishes the exact versioned marker.
+  std::array<float, 256> shared{};
+  assert(!psvr2_toolkit::bridge::vrmotion::MarkerValid(shared.data()));
+  shared[psvr2_toolkit::bridge::vrmotion::kSlotProtocolMagic] =
+      psvr2_toolkit::bridge::vrmotion::kProtocolMagic;
+  assert(!psvr2_toolkit::bridge::vrmotion::MarkerValid(shared.data()));
+  shared[psvr2_toolkit::bridge::vrmotion::kSlotProtocolVersion] =
+      psvr2_toolkit::bridge::vrmotion::kProtocolVersion;
+  assert(psvr2_toolkit::bridge::vrmotion::MarkerValid(shared.data()));
+  assert(psvr2_toolkit::bridge::vrmotion::PayloadValid(0.45f, 45.0f));
+  assert(!psvr2_toolkit::bridge::vrmotion::PayloadValid(1.1f, 45.0f));
+  assert(!psvr2_toolkit::bridge::vrmotion::PayloadValid(0.8f, 0.5f));
 
   std::cout << "DSX protocol tests passed\n";
   return 0;
