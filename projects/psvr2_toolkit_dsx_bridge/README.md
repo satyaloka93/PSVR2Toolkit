@@ -68,7 +68,7 @@ Use `--audio-haptics-gain 0..3` to tune the full-game layer (default `1.35`), or
 - **UDP bind failed:** close DSX or select a free port with `--port`.
 - **No commands appear:** confirm the Cyberpunk mod is enabled and that `--cyberpunk-config` points to its generated `DualSenseXConfig.txt`.
 - **No grip haptics:** confirm the bridge prints `Cyberpunk grip PCM haptics enabled`; the installed Toolkit CAPI must expose PCM functions.
-- **`VR motion haptics paused: incompatible ...`:** update CyberpunkVR Port to a build publishing protocol v1. The guard intentionally refuses unversioned `[157..160]`; gun, audio, adaptive-trigger, and vehicle effects continue independently.
+- **`VR motion haptics paused: incompatible ...`:** if this persists after Cyberpunk has rendered for two seconds, update CyberpunkVR Port to a build publishing protocol v1. The bridge ignores the normal zero-filled interval between creation of the mapping and the first frame's metadata publish. The guard intentionally refuses a genuinely unversioned `[157..160]`; gun, audio, adaptive-trigger, and vehicle effects continue independently.
 - **`VR motion haptics paused: ... heartbeat is stale`:** Cyberpunk is closed, loading, or its OpenXR frame publisher stopped. Motion pulses resume after a fresh heartbeat without replaying the old record.
 - **Cyberpunk's Restart UDP Client button:** do not use it in direct-monitor mode; restart the bridge window instead.
 - **Effects remain after a crash:** restart the bridge and exit with Ctrl+C, or restart SteamVR.
