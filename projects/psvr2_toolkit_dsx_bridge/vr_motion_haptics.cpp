@@ -117,6 +117,8 @@ void VRMotionHaptics::Run() {
 #ifdef _WIN32
   auto nextAttach = std::chrono::steady_clock::now();
   auto heartbeatAt = std::chrono::steady_clock::now();
+  auto markerInvalidSince = std::chrono::steady_clock::time_point{};
+  constexpr auto kMarkerStartupGrace = std::chrono::seconds(2);
 
   while (m_running.load(std::memory_order_acquire)) {
     const auto now = std::chrono::steady_clock::now();
@@ -134,14 +136,24 @@ void VRMotionHaptics::Run() {
     if (!markerValid) {
       m_protocolReady = false;
       m_haveSequence = false;
-      if (!m_incompatibleLogged) {
-        std::cerr << "VR motion haptics paused: incompatible CyberpunkVR shared-slot layout; "
-                     "input/driving values will not be treated as pulses.\n";
+      if (markerInvalidSince == std::chrono::steady_clock::time_point{})
+        markerInvalidSince = now;
+      // OnPresent creates the mapping before the same first frame reaches FlushHandsToShared and
+      // publishes metadata. The watcher can observe that short zero-filled window. Treat it as
+      // startup, not an incompatibility, and keep expected pause notices on stdout: Windows
+      // PowerShell converts a native stderr line into NativeCommandError under ErrorAction=Stop,
+      // terminating run_bridge.ps1 even though the watcher would have recovered next frame.
+      if (!m_incompatibleLogged && now - markerInvalidSince >= kMarkerStartupGrace) {
+        std::cout << "VR motion haptics paused: incompatible CyberpunkVR shared-slot layout "
+                  << "(magic=" << m_shared[kSlotProtocolMagic]
+                  << ", version=" << m_shared[kSlotProtocolVersion]
+                  << "); input/driving values will not be treated as pulses.\n";
         m_incompatibleLogged = true;
       }
       std::this_thread::sleep_for(kPollInterval);
       continue;
     }
+    markerInvalidSince = std::chrono::steady_clock::time_point{};
 
     if (!m_haveHeartbeat || heartbeat != m_lastHeartbeat) {
       m_lastHeartbeat = heartbeat;
@@ -153,13 +165,14 @@ void VRMotionHaptics::Run() {
         m_haveSequence = true;
         m_protocolReady = true;
         m_staleLogged = false;
+        m_incompatibleLogged = false;
         std::cout << "VR motion haptics protocol v1 active (driving-safe slot layout).\n";
       }
     } else if (now - heartbeatAt > kHeartbeatTimeout) {
       m_protocolReady = false;
       m_haveSequence = false;
       if (!m_staleLogged) {
-        std::cerr << "VR motion haptics paused: CyberpunkVR heartbeat is stale; gun/audio/vehicle "
+        std::cout << "VR motion haptics paused: CyberpunkVR heartbeat is stale; gun/audio/vehicle "
                      "bridge effects remain independent.\n";
         m_staleLogged = true;
       }
