@@ -1,0 +1,32 @@
+PSVR2Toolkit + Cyberpunk VR Port 0.1.7
+======================================
+
+This ZIP includes BOTH the verified raw-trigger Toolkit driver and the
+Cyberpunk 0.1.7 bridge. DSX from Steam is NOT required and must not be running
+alongside this bridge. The PlayStation VR2 App from Steam and SteamVR are
+required for the headset; Enhanced DualSense Support is the Cyberpunk mod that
+produces weapon trigger profiles.
+
+FIRST INSTALL
+1. Install the PlayStation VR2 App and set up the headset in SteamVR.
+2. Close the game, SteamVR, and the PlayStation VR2 App completely.
+3. Extract this entire ZIP outside the game folder, retaining all files.
+4. Run INSTALL_RAW_TRIGGER_DRIVER.cmd. It backs up the current driver before
+   installing the included raw-trigger driver. Keep that backup for rollback.
+5. Install and launch the Cyberpunk Enhanced DualSense Support CET mod once,
+   then set UDPautostart=false in its settings. Do not start its UDPClient.
+6. Start SteamVR and connect both Sense controllers.
+7. Run run_cyberpunk017.cmd, then start Cyberpunk VR Port 0.1.7.
+
+EXISTING TOOLKIT USERS
+If the installed driver_playstation_vr2.dll already has SHA-256
+977856e7c1d54a8aea0bf4ef19095ce901fb658d301ca4ba6bf8e077d83a2b43,
+the included driver is identical. You can leave it installed and only replace
+the bridge files; this ZIP is nevertheless complete for a fresh setup.
+
+The launcher refuses another DSX app, UDP client or bridge. It checks for the
+Enhanced DualSense Support config and does not rewrite third-party settings.
+Do not use the older bridge executable for the 0.1.7 port: input slots
+157-160 are controller data there, not haptic events. Use the _017 executable
+and launcher in this ZIP. See README.md for technical details and SHA256SUMS.txt
+for every packaged file's hash.

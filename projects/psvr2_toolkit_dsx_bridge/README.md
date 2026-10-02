@@ -16,17 +16,19 @@ profiles and audio-derived grip haptics.
 
 The DSX app from Steam is **not** required. The bridge accepts the DSX trigger
 protocol, but itself owns the Sense effects through PSVR2Toolkit CAPI. You do
-need SteamVR, the PlayStation VR2 App/compatible Toolkit driver and the
-Enhanced DualSense Support Cyberpunk CET mod. Use the matching Toolkit driver
-package already installed for your headset; this bridge-only release does not
-replace or install it.
+need SteamVR, the PlayStation VR2 App and the Enhanced DualSense Support
+Cyberpunk CET mod. The 0.1.7 full ZIP includes the verified raw-trigger Toolkit
+driver, its backup-producing installer, the bridge, CAPI loader and launcher.
+`START_HERE.txt` gives first-install and existing-driver paths. The included
+driver is byte-for-byte the verified v0.2.0 raw-trigger driver (SHA-256
+`977856e7c1d54a8aea0bf4ef19095ce901fb658d301ca4ba6bf8e077d83a2b43`).
 
 The 0.1.7 bridge preserves Machine motor vibration at the first auto-fire
 transition instead of replacing its sole deduplicated profile command with
 OFF. Shot-onset grip pulses and the other resistance-release modes remain.
 The isolated protocol/Machine tests exercise the guard and translation. The
-release is a Cyberpunk-specific bridge update, not a general Toolkit driver
-update or an Outer Worlds 2 build.
+release is a Cyberpunk-specific bridge update, not a new Toolkit driver
+revision or an Outer Worlds 2 build.
 
 This companion process receives the documented DSX UDP trigger protocol on localhost and translates it to PlayStation VR2 Toolkit CAPI adaptive-trigger commands. It allows game mods that target DSX—such as Cyberpunk 2077 Enhanced DualSense Support—to drive PSVR2 Sense triggers without DSX owning the controllers.
 
