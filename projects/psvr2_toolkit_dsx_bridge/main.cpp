@@ -16,6 +16,7 @@
 #include "cyberpunk_config.h"
 #include "dsx_protocol.h"
 #include "haptics_engine.h"
+#include "machine_release_policy.h"
 #include "psvr2tk_capi_loader.h"
 
 #include <array>
@@ -323,7 +324,9 @@ void ApplyInstructions(const std::vector<psvr2_toolkit::dsx::Instruction> &instr
     }
 
     const int sideValue = InstructionParam(instruction, 1);
-    if (firingBreaks && sideValue >= 1 && sideValue <= 2 && (*firingBreaks)[static_cast<size_t>(sideValue - 1)]) {
+    if (firingBreaks && sideValue >= 1 && sideValue <= 2 &&
+        psvr2_toolkit::bridge::ShouldReleaseMotorOnFiringBreak(
+            (*firingBreaks)[static_cast<size_t>(sideValue - 1)], InstructionParam(instruction, 2))) {
       // The best PSVR2 gun implementations ramp and plateau while pulling,
       // then drop resistance at the actual shot. Enhanced DualSense Support
       // signals that edge by changing a loaded Bow/Weapon profile to

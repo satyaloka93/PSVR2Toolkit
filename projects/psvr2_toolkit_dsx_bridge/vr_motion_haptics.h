@@ -24,6 +24,11 @@ class HapticsEngine;
 //   [158] hand       -- 0 = left, 1 = right
 //   [159] amplitude  -- 0..1
 //   [160] duration   -- milliseconds
+//   [168] magic      -- 18512
+//   [169] version    -- 1
+//   [170] heartbeat  -- advances from the matching live port
+// The marker and a fresh heartbeat are mandatory; the bridge may keep an old
+// mapping alive after the game exits.
 class VRMotionHaptics {
 public:
   ~VRMotionHaptics();
@@ -47,7 +52,12 @@ private:
   void *m_mapping = nullptr;      // HANDLE
   const float *m_shared = nullptr;
   float m_lastSequence = 0.0f;
+  float m_lastHeartbeat = 0.0f;
   bool m_haveSequence = false;
+  bool m_haveHeartbeat = false;
+  bool m_protocolReady = false;
+  bool m_incompatibleLogged = false;
+  bool m_staleLogged = false;
   std::string m_lastError;
   std::atomic<uint64_t> m_pulses{0};
   std::atomic<bool> m_running{false};
