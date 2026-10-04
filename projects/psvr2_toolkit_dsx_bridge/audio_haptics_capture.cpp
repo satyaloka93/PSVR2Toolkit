@@ -1,6 +1,7 @@
 #include "audio_haptics_capture.h"
 
 #include "haptics_engine.h"
+#include "audio_haptics_policy.h"
 
 #include <algorithm>
 #include <array>
@@ -216,10 +217,14 @@ void AudioHapticsCapture::Run() {
           const double transient = std::clamp((fastEnvelope - slowEnvelope * 1.12) * 15.0, 0.0, 1.0);
           const double carrier = std::clamp(std::sin(tactilePhase) * 10.0, -1.0, 1.0);
           tactilePhase = std::fmod(tactilePhase + 2.0 * kPi * 155.0 / kHapticSampleRate, 2.0 * kPi);
+          // Grip motors should convey road/engine rumble regardless of stereo panning.
+          // Select the stronger signed low-frequency channel (not an average, which can
+          // cancel out-of-phase material), then send that same tactile bed to both grips.
+          const double sharedBass = SharedLowFrequencyRoadSignal(lowPassed[0], lowPassed[1]);
+          const double bassEnergy = std::abs(sharedBass);
+          const double gate = std::clamp((bassEnergy - 0.0015) / 0.006, 0.0, 1.0);
+          const double bass = std::tanh(sharedBass * 13.0) * gate;
           for (size_t side = 0; side < 2; ++side) {
-            const double bassEnergy = std::abs(lowPassed[side]);
-            const double gate = std::clamp((bassEnergy - 0.0015) / 0.006, 0.0, 1.0);
-            const double bass = std::tanh(lowPassed[side] * 13.0) * gate;
             const double output = std::tanh((bass * 0.72 + carrier * transient * 0.92) * m_gain);
             tactile.push_back(static_cast<float>(output));
           }
