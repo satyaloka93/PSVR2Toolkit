@@ -21,13 +21,14 @@ public:
   bool Start(HapticsEngine *engine, float gain = 1.0f);
   void Stop();
   void SetEnabled(bool enabled);
+  void SetGain(float gain);
   const std::string &LastError() const { return m_error; }
 
 private:
   void Run();
 
   HapticsEngine *m_engine = nullptr;
-  float m_gain = 1.0f;
+  std::atomic<float> m_gain{1.0f};
   std::atomic<bool> m_running{false};
   std::atomic<bool> m_enabled{false};
   std::thread m_thread;

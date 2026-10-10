@@ -1,4 +1,4 @@
-PSVR2Toolkit + Cyberpunk VR Port 0.1.7
+PSVR2Toolkit + Cyberpunk VR Port 0.1.7 - bridge v0.3.2
 ======================================
 
 This ZIP includes BOTH the verified raw-trigger Toolkit driver and the
@@ -7,25 +7,84 @@ alongside this bridge. The PlayStation VR2 App from Steam and SteamVR are
 required for the headset; Enhanced DualSense Support is the Cyberpunk mod that
 produces weapon trigger profiles.
 
+TWO SEPARATE TASKS
+driver\ = optional, one-time Toolkit driver installation/check/rollback.
+bridge\ = one-time Cyberpunk setup, then the launcher used each play session.
+Neither bridge setup nor launching the bridge replaces your Toolkit driver.
+
+WHY TOOLKIT IS NEEDED / DO I NEED A NEW DRIVER?
+The stock Sony driver does not provide the Toolkit controller API (CAPI) used
+by this bridge to send adaptive-trigger effects and PCM grip vibration.
+Install PSVR2Toolkit first if you only have the stock PlayStation VR2 App:
+  https://github.com/BnuuySolutions/PSVR2Toolkit/wiki/Installation
+Its complete Windows driver installation supplies the original Sony DLL backup,
+libcrossipc.dll, libusb-1.0.dll and psvr2_toolkit_capi.dll. This Cyberpunk ZIP
+includes our replacement driver AND bridge, but not those base Toolkit files.
+Our driver installer checks for them and stops safely if they are missing.
+
+Our bundled driver adds raw-trigger transport and clears stale grip-PCM
+attenuation, which could otherwise make vibration very weak. It is the tested
+baseline, NOT a new driver revision for v0.3.2. Current bridge trigger effects
+use standard CAPI modes, so raw-trigger support alone is not a requirement.
+Already using v0.3.1's driver? SKIP driver installation: it is identical.
+Already using another working Toolkit driver? Keep it; a different hash alone
+does not mean it is incompatible. The in-game audio menu needs no driver change.
+
 FIRST INSTALL
-1. Install the PlayStation VR2 App and set up the headset in SteamVR.
-2. Close the game, SteamVR, and the PlayStation VR2 App completely.
-3. Extract this entire ZIP outside the game folder, retaining all files.
-4. Run INSTALL_RAW_TRIGGER_DRIVER.cmd. It backs up the current driver before
-   installing the included raw-trigger driver. Keep that backup for rollback.
-5. Install and launch the Cyberpunk Enhanced DualSense Support CET mod once,
-   then set UDPautostart=false in its settings. Do not start its UDPClient.
-6. Start SteamVR and connect both Sense controllers.
-7. Run run_cyberpunk017.cmd, then start Cyberpunk VR Port 0.1.7.
+1. Install the PlayStation VR2 App, set up the headset in SteamVR, and complete
+   the base PSVR2Toolkit installation linked above if not already installed.
+2. Extract this entire ZIP outside the game folder, retaining both directories.
+3. Driver: read EXISTING TOOLKIT USERS below. If you need the tested baseline,
+   close SteamVR and run driver\INSTALL_RAW_TRIGGER_DRIVER.cmd. It displays
+   hashes, skips an identical installation, and asks before replacing anything.
+4. Install Enhanced DualSense Support and its prerequisites (including CET and
+   Native Settings UI). Run the game once to create its settings, then close it.
+   Enhanced DualSense Support: https://www.nexusmods.com/cyberpunk2077/mods/4156
+   Native Settings UI: https://www.nexusmods.com/cyberpunk2077/mods/3518
+5. Run bridge\setup_cyberpunk017.cmd. It previews its changes and asks permission:
+   - add audio controls under the EXISTING DualSense in-game mod settings;
+   - set UDPautostart=false without changing weapon profiles;
+   - move red4ext\plugins\DualSenseSupport\DualSense Support.dll into a backup.
+   KEEP the DualSense Support CET mod. Only its unused native launcher is moved.
+   Setting UDPautostart=false alone does not stop RED4ext loading that DLL.
+   Backups and restore paths are printed. Saved audio preferences survive updates.
+6. Start SteamVR, connect both Sense controllers, run bridge\run_cyberpunk017.cmd,
+   then start Cyberpunk VR Port 0.1.7. Do not run DSX or EDS's UDPClient.
+
+AUDIO CONTROLS (NO F10)
+In the game's Mods menu, open the DualSense settings page > PSVR2 Haptics.
+Audio haptics starts OFF; enable it if wanted and adjust Audio haptics strength.
+35% is the initial strength, not a headset-validated recommendation. 0% is silent.
+Changes are saved and applied by the running bridge within approximately one second.
+OFF stops audio capture but leaves adaptive triggers, weapon recoil and VR melee
+pulses active. Audio includes music/ambience and anything else playing through
+the default Windows output device; it is not isolated to Cyberpunk's process.
+Start with audio OFF to assess sword feedback without background vibration.
+
+NONSTANDARD GAME LOCATION
+From the bridge directory, either CMD accepts:
+  setup_cyberpunk017.cmd -GameRoot "D:\path\to\Cyberpunk 2077"
+  run_cyberpunk017.cmd -GameRoot "D:\path\to\Cyberpunk 2077"
+Both accept -CheckOnly for a read-only preflight. No script editing required.
 
 EXISTING TOOLKIT USERS
 If the installed driver_playstation_vr2.dll already has SHA-256
 977856e7c1d54a8aea0bf4ef19095ce901fb658d301ca4ba6bf8e077d83a2b43,
 the included driver is identical. You can leave it installed and only replace
-the bridge files; this ZIP is nevertheless complete for a fresh setup.
+the bridge files. A fresh setup still requires the base Toolkit installation
+described above; do not install this replacement DLL alone over stock Sony.
+
+This is the same driver bundled in v0.2.0 and v0.3.1, not a new Toolkit driver
+revision. Its fork changes add raw-trigger transport and clear stale grip-PCM
+attenuation. The bridge currently translates to standard CAPI trigger modes.
+A different installed driver hash does NOT prove incompatibility: keep a
+working compatible installation, or choose the supplied known-tested baseline.
+The installer prints a rollback command and saves the previous DLL alongside
+the installed driver. Close SteamVR before replacement or restoration.
 
 The launcher refuses another DSX app, UDP client or bridge. It checks for the
-Enhanced DualSense Support config and does not rewrite third-party settings.
+Enhanced DualSense Support config and does not rewrite third-party settings;
+only the separate setup command makes the previewed, approved setup changes.
 Do not use the older bridge executable for the 0.1.7 port: input slots
 157-160 are controller data there, not haptic events. Use the _017 executable
 and launcher in this ZIP. See README.md for technical details and SHA256SUMS.txt

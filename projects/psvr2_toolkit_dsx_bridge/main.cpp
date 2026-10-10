@@ -12,6 +12,7 @@
 #endif
 
 #include "audio_haptics_capture.h"
+#include "audio_haptics_settings.h"
 #include "vr_motion_haptics.h"
 #include "cyberpunk_config.h"
 #include "dsx_protocol.h"
@@ -22,6 +23,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <csignal>
 #include <cstdint>
 #include <filesystem>
@@ -98,7 +100,11 @@ struct Options {
   uint16_t port = 6969;
   std::filesystem::path cyberpunkConfig;
   bool gameAudioHaptics = true;
+#ifdef PSVR2TK_CYBERPUNK_017
+  float gameAudioGain = 0.0f; // Opt-in through the in-game DualSense settings.
+#else
   float gameAudioGain = 1.35f;
+#endif
   bool vrMotionHaptics = true;
   float vrMotionGain = 1.0f;
 };
@@ -124,7 +130,7 @@ Options ResolveOptions(int argc, char **argv) {
     }
     if (argument == "--audio-haptics-gain" && i + 1 < argc) {
       options.gameAudioGain = std::stof(argv[++i]);
-      if (options.gameAudioGain < 0.0f || options.gameAudioGain > 3.0f)
+      if (!std::isfinite(options.gameAudioGain) || options.gameAudioGain < 0.0f || options.gameAudioGain > 3.0f)
         throw std::runtime_error("audio haptics gain must be between 0 and 3");
       continue;
     }
@@ -134,7 +140,7 @@ Options ResolveOptions(int argc, char **argv) {
     }
     if (argument == "--vr-motion-gain" && i + 1 < argc) {
       options.vrMotionGain = std::stof(argv[++i]);
-      if (options.vrMotionGain < 0.0f || options.vrMotionGain > 3.0f)
+      if (!std::isfinite(options.vrMotionGain) || options.vrMotionGain < 0.0f || options.vrMotionGain > 3.0f)
         throw std::runtime_error("vr motion gain must be between 0 and 3");
       continue;
     }
@@ -142,6 +148,9 @@ Options ResolveOptions(int argc, char **argv) {
       std::cout << "Usage: psvr2_toolkit_dsx_bridge [--port PORT] [--cyberpunk-config FILE]\n"
                    "       [--audio-haptics-gain 0..3] [--no-game-audio-haptics]\n"
                    "       [--vr-motion-gain 0..3] [--no-vr-motion-haptics]\n"
+                   "0.1.7: in-game Mods > DualSense > PSVR2 Haptics controls audio live.\n"
+                   "Audio is off by default; CLI gain is a fallback until menu settings exist.\n"
+                   "--no-game-audio-haptics always overrides the menu.\n"
                    "Receives DSX UDP commands, monitors Enhanced DualSense Support, and converts game audio to grip haptics.\n";
       std::exit(0);
     }
@@ -410,13 +419,18 @@ int main(int argc, char **argv) {
 
   psvr2_toolkit::bridge::AudioHapticsCapture audioHaptics;
   bool audioHapticsAvailable = false;
-  if (pcmAvailable && options.gameAudioHaptics) {
-    audioHapticsAvailable = audioHaptics.Start(&haptics, options.gameAudioGain);
-    if (audioHapticsAvailable)
-      std::cout << "Full-game audio haptics enabled at gain " << options.gameAudioGain << ".\n";
-    else
-      std::cerr << "Full-game audio haptics unavailable: " << audioHaptics.LastError() << '\n';
+  bool audioStartAttempted = false;
+  psvr2_toolkit::bridge::AudioHapticsSettings audioSettings;
+  audioSettings.enabled = options.gameAudioGain > 0.0f;
+  audioSettings.strength = static_cast<int>(std::lround(options.gameAudioGain * 100.0f));
+  std::filesystem::path audioSettingsPath;
+#ifdef PSVR2TK_CYBERPUNK_017
+  if (!options.cyberpunkConfig.empty()) {
+    audioSettingsPath = options.cyberpunkConfig.parent_path().parent_path().parent_path() /
+                        "PSVR2 Haptics" / "settings.ini";
+    std::cout << "In-game audio settings: " << audioSettingsPath.string() << '\n';
   }
+#endif
   // Melee swing/impact from the CyberpunkVR Port plugin. Routed through the same engine as the
   // audio and semantic layers so the three mix instead of competing for the actuators.
   psvr2_toolkit::bridge::VRMotionHaptics vrMotion;
@@ -446,7 +460,8 @@ int main(int argc, char **argv) {
   bool cyberpunkConfigApplied = false;
   std::array<HapticTriggerState, 2> hapticStates{};
   auto lastStatusWrite = std::chrono::steady_clock::time_point{};
-  bool audioHapticsGameActive = false;
+  bool audioSettingsReported = false;
+  bool audioSettingsInvalidReported = false;
   while (g_running) {
     if (!options.cyberpunkConfig.empty()) {
       std::error_code fileError;
@@ -468,14 +483,52 @@ int main(int argc, char **argv) {
       const auto now = std::chrono::steady_clock::now();
       if (now - lastStatusWrite >= std::chrono::seconds(1)) {
         PublishCyberpunkStatus(options.cyberpunkConfig);
-        if (audioHapticsAvailable) {
-          const bool gameRunning = IsCyberpunkRunning();
-          audioHaptics.SetEnabled(gameRunning);
-          if (gameRunning != audioHapticsGameActive) {
-            std::cout << "Full-game audio haptics " << (gameRunning ? "active." : "paused (Cyberpunk is not running).") << std::endl;
-            audioHapticsGameActive = gameRunning;
+        if (!audioSettingsPath.empty()) {
+          std::ifstream input(audioSettingsPath, std::ios::binary);
+          if (input) {
+            // Bounded read, including during CET's truncate/write sequence.
+            char bytes[4097];
+            input.read(bytes, sizeof(bytes));
+            psvr2_toolkit::bridge::AudioHapticsSettings incoming;
+            if (psvr2_toolkit::bridge::ParseAudioHapticsSettings(
+                    std::string(bytes, static_cast<size_t>(input.gcount())), incoming)) {
+              if (incoming.enabled != audioSettings.enabled || incoming.strength != audioSettings.strength)
+                audioSettingsReported = false;
+              audioSettings = incoming;
+              audioSettingsInvalidReported = false;
+            } else if (!audioSettingsInvalidReported) {
+              std::cerr << "Audio settings incomplete/invalid; retaining last valid selection.\n";
+              audioSettingsInvalidReported = true;
+            }
           }
         }
+        if (!audioSettingsReported) {
+          std::cout << "Audio haptics: " << (audioSettings.enabled ? "ON" : "OFF")
+                    << ", strength " << audioSettings.strength << "%"
+                    << (options.gameAudioHaptics ? "" : " (disabled by command line)") << std::endl;
+          audioSettingsReported = true;
+        }
+        const bool captureWanted = pcmAvailable && options.gameAudioHaptics &&
+            audioSettings.enabled && audioSettings.strength > 0 && IsCyberpunkRunning();
+        if (!captureWanted && audioStartAttempted) {
+          audioHaptics.Stop(); // Join then clear only audio, never semantic/motion pulses.
+          audioHapticsAvailable = false;
+          audioStartAttempted = false;
+          std::cout << "Audio capture stopped; adaptive triggers and motion haptics unchanged.\n";
+        } else if (captureWanted && !audioStartAttempted) {
+          audioStartAttempted = true;
+          audioHapticsAvailable = audioHaptics.Start(&haptics, audioSettings.Gain());
+          if (audioHapticsAvailable) {
+            audioHaptics.SetEnabled(true);
+            std::cout << "Audio capture active (default playback device).\n";
+          } else {
+            audioHaptics.Stop();
+            std::cerr << "Audio capture unavailable: " << audioHaptics.LastError()
+                      << "; toggle audio off/on to retry.\n";
+          }
+        }
+        if (audioHapticsAvailable)
+          audioHaptics.SetGain(audioSettings.Gain());
         lastStatusWrite = now;
       }
     }

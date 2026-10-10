@@ -32,6 +32,17 @@ For developers, we also have our own API library, which allows you to take full 
 
 ## [Installation Guide](https://github.com/BnuuySolutions/PSVR2Toolkit/wiki/Installation)
 
+## Cyberpunk VR Port 0.1.7 haptics (community fork)
+
+Download the [v0.3.2 full driver + bridge package](https://github.com/satyaloka93/PSVR2Toolkit/releases/tag/cyberpunk-dsx-bridge-v0.3.2).
+It separates one-time `driver/` setup from the `bridge/` launcher and adds audio
+controls to the game's existing **Mods > DualSense settings > PSVR2 Haptics**
+page. Audio defaults off; adaptive triggers and melee feedback remain active.
+DSX is not required. Existing v0.3.1 users do **not** need to replace their
+driver: the bundled driver is unchanged. Fresh users need the base Toolkit
+installation above before applying this Cyberpunk add-on.
+See [setup, driver rationale and upgrade instructions](projects/psvr2_toolkit_dsx_bridge/README.md).
+
 ## [Jailbreak Guide](https://github.com/BnuuySolutions/PSVR2Toolkit/wiki/Jailbreaking-your-headset)
 
 # Code Signing Policy

@@ -1,6 +1,7 @@
 #include "audio_haptics_capture.h"
 
 #include "haptics_engine.h"
+#include "audio_haptics_policy.h"
 
 #include <algorithm>
 #include <array>
@@ -76,7 +77,7 @@ bool AudioHapticsCapture::Start(HapticsEngine *engine, float gain) {
   if (!engine || m_running.exchange(true))
     return engine != nullptr;
   m_engine = engine;
-  m_gain = std::clamp(gain, 0.0f, 3.0f);
+  SetGain(gain);
   m_ready = false;
   m_available = false;
   m_error.clear();
@@ -87,8 +88,7 @@ bool AudioHapticsCapture::Start(HapticsEngine *engine, float gain) {
 }
 
 void AudioHapticsCapture::Stop() {
-  if (!m_running.exchange(false))
-    return;
+  m_running = false;
   if (m_thread.joinable())
     m_thread.join();
   if (m_engine)
@@ -99,6 +99,10 @@ void AudioHapticsCapture::SetEnabled(bool enabled) {
   m_enabled = enabled;
   if (!enabled && m_engine)
     m_engine->ClearGameAudio();
+}
+
+void AudioHapticsCapture::SetGain(float gain) {
+  m_gain.store(std::isfinite(gain) ? std::clamp(gain, 0.0f, 3.0f) : 0.0f);
 }
 
 void AudioHapticsCapture::Run() {
@@ -183,6 +187,7 @@ void AudioHapticsCapture::Run() {
         if (FAILED(result))
           break;
         const bool silent = (flags & AUDCLNT_BUFFERFLAGS_SILENT) != 0;
+        const float gain = m_gain.load();
         std::vector<float> tactile;
         tactile.reserve(static_cast<size_t>(frames) * 2 * 3000 / std::max<uint32_t>(1, format->nSamplesPerSec) + 4);
 
@@ -216,11 +221,13 @@ void AudioHapticsCapture::Run() {
           const double transient = std::clamp((fastEnvelope - slowEnvelope * 1.12) * 15.0, 0.0, 1.0);
           const double carrier = std::clamp(std::sin(tactilePhase) * 10.0, -1.0, 1.0);
           tactilePhase = std::fmod(tactilePhase + 2.0 * kPi * 155.0 / kHapticSampleRate, 2.0 * kPi);
+          // Preserve c080162: stereo-panned road/engine bass reaches both grips.
+          const double sharedBass = SharedLowFrequencyRoadSignal(lowPassed[0], lowPassed[1]);
+          const double bassEnergy = std::abs(sharedBass);
+          const double gate = std::clamp((bassEnergy - 0.0015) / 0.006, 0.0, 1.0);
+          const double bass = std::tanh(sharedBass * 13.0) * gate;
           for (size_t side = 0; side < 2; ++side) {
-            const double bassEnergy = std::abs(lowPassed[side]);
-            const double gate = std::clamp((bassEnergy - 0.0015) / 0.006, 0.0, 1.0);
-            const double bass = std::tanh(lowPassed[side] * 13.0) * gate;
-            const double output = std::tanh((bass * 0.72 + carrier * transient * 0.92) * m_gain);
+            const double output = std::tanh((bass * 0.72 + carrier * transient * 0.92) * gain);
             tactile.push_back(static_cast<float>(output));
           }
         }

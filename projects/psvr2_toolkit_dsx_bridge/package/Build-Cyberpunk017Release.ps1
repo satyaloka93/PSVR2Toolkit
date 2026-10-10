@@ -24,20 +24,26 @@ $staging = Join-Path $outDir ('cyberpunk017-stage-' + [guid]::NewGuid().ToString
 New-Item -ItemType Directory -Path $staging | Out-Null
 try {
     $files = @(
-        @{ Source=(Join-Path $bin 'psvr2_toolkit_dsx_bridge_017.exe'); Name='psvr2_toolkit_dsx_bridge_017.exe' },
-        @{ Source=(Join-Path $bin 'psvr2_toolkit_capi_loader.dll'); Name='psvr2_toolkit_capi_loader.dll' },
-        @{ Source=$driver; Name='driver_playstation_vr2.dll' },
-        @{ Source=(Join-Path $packageRoot 'INSTALL_RAW_TRIGGER_DRIVER.cmd'); Name='INSTALL_RAW_TRIGGER_DRIVER.cmd' },
-        @{ Source=(Join-Path $packageRoot 'install_raw_trigger_driver.ps1'); Name='install_raw_trigger_driver.ps1' },
+        @{ Source=(Join-Path $bin 'psvr2_toolkit_dsx_bridge_017.exe'); Name='bridge\psvr2_toolkit_dsx_bridge_017.exe' },
+        @{ Source=(Join-Path $bin 'psvr2_toolkit_capi_loader.dll'); Name='bridge\psvr2_toolkit_capi_loader.dll' },
+        @{ Source=$driver; Name='driver\driver_playstation_vr2.dll' },
+        @{ Source=(Join-Path $packageRoot 'INSTALL_RAW_TRIGGER_DRIVER.cmd'); Name='driver\INSTALL_RAW_TRIGGER_DRIVER.cmd' },
+        @{ Source=(Join-Path $packageRoot 'install_raw_trigger_driver.ps1'); Name='driver\install_raw_trigger_driver.ps1' },
         @{ Source=(Join-Path $packageRoot 'START_HERE_017.txt'); Name='START_HERE.txt' },
-        @{ Source=(Join-Path $packageRoot 'run_cyberpunk017.cmd'); Name='run_cyberpunk017.cmd' },
-        @{ Source=(Join-Path $packageRoot 'run_cyberpunk017.ps1'); Name='run_cyberpunk017.ps1' },
+        @{ Source=(Join-Path $packageRoot 'run_cyberpunk017.cmd'); Name='bridge\run_cyberpunk017.cmd' },
+        @{ Source=(Join-Path $packageRoot 'run_cyberpunk017.ps1'); Name='bridge\run_cyberpunk017.ps1' },
+        @{ Source=(Join-Path $packageRoot 'Cyberpunk017.Common.ps1'); Name='bridge\Cyberpunk017.Common.ps1' },
+        @{ Source=(Join-Path $packageRoot 'setup_cyberpunk017.cmd'); Name='bridge\setup_cyberpunk017.cmd' },
+        @{ Source=(Join-Path $packageRoot 'setup_cyberpunk017.ps1'); Name='bridge\setup_cyberpunk017.ps1' },
+        @{ Source=(Join-Path $packageRoot 'cet\PSVR2 Haptics\init.lua'); Name='bridge\cet\PSVR2 Haptics\init.lua' },
         @{ Source=(Join-Path $sourceRoot 'projects\psvr2_toolkit_dsx_bridge\README.md'); Name='README.md' },
         @{ Source=(Join-Path $sourceRoot 'LICENSE'); Name='LICENSE' }
     )
     foreach ($file in $files) {
         if (-not (Test-Path -LiteralPath $file.Source -PathType Leaf)) { throw "Release input missing: $($file.Source)" }
-        Copy-Item -LiteralPath $file.Source -Destination (Join-Path $staging $file.Name)
+        $destination = Join-Path $staging $file.Name
+        New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+        Copy-Item -LiteralPath $file.Source -Destination $destination
     }
     $hashes = foreach ($file in $files) {
         $hash = (Get-FileHash -LiteralPath (Join-Path $staging $file.Name) -Algorithm SHA256).Hash.ToLowerInvariant()

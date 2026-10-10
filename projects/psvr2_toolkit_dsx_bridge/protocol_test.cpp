@@ -53,7 +53,8 @@ int main() {
   assert(gallopingRaw.command.commandData.multiplePositionVibrationParam.amplitude[8] == 6);
   assert(gallopingRaw.command.commandData.multiplePositionVibrationParam.amplitude[9] == 0);
 
-  Instruction machine{1, {0, 2, 16, 1, 9, 7, 4, 18, 6}};
+  // DSX Machine is mode 18; 16 is SemiAutomaticGun, not Machine.
+  Instruction machine{1, {0, 2, 18, 1, 9, 7, 4, 18, 6}};
   Translation machineRaw;
   assert(TranslateTriggerUpdate(machine, machineRaw, &error));
   assert(machineRaw.command.mode == SCE_PAD_TRIGGER_EFFECT_MODE_MULTIPLE_POSITION_VIBRATION);
