@@ -44,6 +44,9 @@ if(PSVR2TK_BUILD_DSX_TESTS)
   target_include_directories(psvr2_toolkit_machine_release_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   target_link_libraries(psvr2_toolkit_machine_release_test PRIVATE common)
   add_test(NAME psvr2_toolkit_machine_release_test COMMAND psvr2_toolkit_machine_release_test)
+  add_executable(psvr2_toolkit_audio_haptics_policy_test audio_haptics_policy_test.cpp)
+  target_include_directories(psvr2_toolkit_audio_haptics_policy_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME psvr2_toolkit_audio_haptics_policy_test COMMAND psvr2_toolkit_audio_haptics_policy_test)
   add_executable(psvr2_toolkit_dsx_protocol_test
     protocol_test.cpp
     cyberpunk_config.cpp
